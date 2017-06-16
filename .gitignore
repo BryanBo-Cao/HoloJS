@@ -244,3 +244,6 @@ ModelManifest.xml
 # ANGLE build directories
 Debug_Win32/
 Release_Win32/
+
+# macOS
+*.DS_Store
