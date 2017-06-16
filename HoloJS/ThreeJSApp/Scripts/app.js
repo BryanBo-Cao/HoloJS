@@ -25,6 +25,7 @@ class HolographicCamera extends THREE.Camera {
 let renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 let scene = new THREE.Scene();
 let camera = window.experimentalHolographic === true ? new HolographicCamera() : new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
+let raycaster = new THREE.Raycaster();
 let clock = new THREE.Clock();
 let loader = new THREE.TextureLoader();
 let material = new THREE.MeshStandardMaterial({ vertexColors: THREE.VertexColors, map: new THREE.DataTexture(new Uint8Array(3).fill(255), 1, 1, THREE.RGBFormat) });
@@ -35,7 +36,7 @@ let pointLight = new THREE.PointLight(0xFFFFFF, 0.5);
 
 let cube = new THREE.Mesh(new THREE.BoxBufferGeometry(0.2, 0.2, 0.2), material.clone());
 let sphere = new THREE.Mesh(initColors(new THREE.SphereBufferGeometry(0.1, 20, 20)), material.clone());
-let cone = new THREE.Mesh(initColors(new THREE.ConeBufferGeometry(0.1, 0.2, 20, 20)), material.clone());
+//let cone = new THREE.Mesh(initColors(new THREE.ConeBufferGeometry(0.1, 0.2, 20, 20)), material.clone());
 let torus = new THREE.Mesh(initColors(new THREE.TorusKnotBufferGeometry(0.2, 0.02, 100, 100)), material.clone());
 let cursor = new THREE.Mesh(initColors(new THREE.RingBufferGeometry(0.001, 0.003, 20, 20)), material.clone());
 
@@ -54,16 +55,16 @@ cube.geometry.addAttribute('color', new THREE.BufferAttribute(Float32Array.from(
     0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, // back - cyan
     1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, // front - purple
 ]), 3));
-loader.load('texture.png', tex => { cube.material.map = tex; start(); }, x => x, err => start());
+loader.load('question-texture.png', tex => { cube.material.map = tex; start(); }, x => x, err => start());
 
 sphere.position.set(0.4, 0, -1.5);
 sphere.material.color.set(0xff0000);
 sphere.material.roughness = 0.3;
 sphere.material.metalness = 0.2;
-
+/*
 cone.position.set(-0.4, 0, -1.5);
 cone.material.color.set(0x0000ff);
-cone.material.roughness = 0.5;
+cone.material.roughness = 0.5;*/
 
 torus.scale.set(1.5, 1.5, 1.5);
 torus.material.color.set(0x00ff00);
@@ -78,18 +79,28 @@ scene.add(ambientLight);
 scene.add(directionalLight);
 scene.add(pointLight);
 
+//test
+let myCone = new THREE.Mesh(initColors(new THREE.ConeBufferGeometry(0.1, 0.2, 20, 20)), material.clone());
+myCone.position.set(-0.2, 0, -0.2);
+myCone.material.color.set(0x333333);
+myCone.material.roughness = 0.5;
+scene.add(myCone);
+///test
+
 scene.add(cube);
 scene.add(sphere);
-scene.add(cone);
+//scene.add(cone);
 scene.add(torus);
 camera.add(cursor);
 scene.add(camera);
 
 cube.frustumCulled = false;
 sphere.frustumCulled = false;
-cone.frustumCulled = false;
+//cone.frustumCulled = false;
 torus.frustumCulled = false;
 cursor.frustumCulled = false;
+
+myCone.frustumCulled = false;
 
 var controls;
 
@@ -102,46 +113,72 @@ function initColors (geometry) {
     return geometry.addAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position.array.length).fill(1.0), 3));
 }
 
+let frameCnt = 0;
+let cubeYDirection = "UP";
 function update (delta, elapsed) {
     window.requestAnimationFrame(() => update(clock.getDelta(), clock.getElapsedTime()));
 
     pointLight.position.set(0 + 2.0 * Math.cos(elapsed * 0.5), 0, -1.5 + 2.0 * Math.sin(elapsed * 0.5));
+    cube.rotation.y += 0.01;
     sphere.scale.x = sphere.scale.y = sphere.scale.z = Math.abs(Math.cos(elapsed * 0.3)) * 0.6 + 1.0;
-    cone.position.y = Math.sin(elapsed * 0.5) * 0.1;
+    //cone.position.y = Math.sin(elapsed * 0.5) * 0.1;
     torus.position.z = -2 - Math.abs(Math.cos(elapsed * 0.2));
 
+    raycaster.ray.origin.setFromMatrixPosition(camera.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).transformDirection(camera.matrixWorld);
+    let intersects = raycaster.intersectObjects(scene.children);
+    if (intersects.length > 0) {
+        cursor.material.color.set(0xFFFF00);
+        cursor.material.opacity = 0.8;
+        cursor.scale.set(3, 3, 3);
+    }
+    else {
+        cursor.material.color.set(0xFFFFFF);
+        cursor.material.opacity = 0.5;
+        cursor.scale.set(1, 1, 1);
+    }
+
     if (camera.update) camera.update();
+
+    // let cube move up and down
+    if (cubeYDirection == "UP") cube.position.y += 0.005;
+    else cube.position.y -= 0.005;
+    if (cube.position.y <= -1) cubeYDirection = "UP";
+    else if (cube.position.y >= 1) cubeYDirection = "DOWN";
+    /// let cube move up and down
+
+    // add new sphere on the cursor in every 80 cnts
+    if (frameCnt >= 80) {
+        let newSphere = new THREE.Mesh(initColors(new THREE.SphereBufferGeometry(0.1, 5, 5)), material.clone());
+        //newSphere.position.set(cursor.position.x + camera.position.x, cursor.position.y + camera.position.y, cursor.position.z + camera.position.z);
+        //newSphere.setFromMatrixPosition(camera.matrixWorld);
+        //newSphere.position.set(cursor.position.x, cursor.position.y, cursor.position.z);
+        //newSphere.position.set(0, 0, -1).setFromMatrixPosition(camera.matrixWorld);
+        newSphere.material.color.set(0x332233);
+        newSphere.material.roughness = 0.5;
+        newSphere.material.metalness = 0.5;
+
+        var vec = new THREE.Vector3(0, 0, -1);
+        vec.applyQuaternion(camera.quaternion);
+        newSphere.position.copy(vec);
+        // reference: https://stackoverflow.com/questions/17218054/how-to-put-an-object-in-front-of-camera-in-three-js
+
+        newSphere.position.x += camera.position.x;
+        newSphere.position.y += camera.position.y;
+        newSphere.position.z += camera.position.z;
+
+        scene.add(newSphere);
+        newSphere.frustumCulled = false;
+        frameCnt = 0;
+    }
+    frameCnt++;
+    /// add new sphere on the cursor
 
     renderer.render(scene, camera);
 }
 
+let evtSource = new EventSource("http://10.100.201.12:5000/");
+
 function start () {
     update(clock.getDelta(), clock.getElapsedTime());
-}
-
-// Listen to spatial input events (hands)
-canvas.addEventListener("sourcepress", onSpatialSourcePress);
-canvas.addEventListener("sourcerelease", onSpatialSourceRelease);
-canvas.addEventListener("sourceupdate", onSpatialSourceUpdate);
-// treat source lost the same way as source release - stop moving the cube when hands input is lost
-canvas.addEventListener("sourcelost", onSpatialSourceRelease);
-
-let lastSpatialInputX = 0;
-let spatialInputTracking = false;
-
-function onSpatialSourcePress(spatialInputEvent) {
-    lastSpatialInputX = spatialInputEvent.location.x;
-    spatialInputTracking = true;
-}
-
-function onSpatialSourceRelease(spatialInputEvent) {
-    spatialInputTracking = false;
-}
-
-function onSpatialSourceUpdate(spatialInputEvent) {
-    if (spatialInputTracking === true) {
-        // rotate the cube proportional to hand movement on X axis
-        cube.rotation.y += (lastSpatialInputX - spatialInputEvent.location.x);
-        lastSpatialInputX = spatialInputEvent.location.x;
-    }
 }
